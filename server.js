@@ -3,22 +3,23 @@ const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // DATABASE CONFIGURATION
+// On Render, the disk is already mounted at /data. We just point to it.
 const dbDir = process.env.RENDER ? '/data' : '.';
-if (process.env.RENDER && !fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-}
-
 const dbPath = path.join(dbDir, 'vende_ya.db');
+
+// Initialize Database connection
 const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) console.error("DB Connection Error:", err.message);
-    else console.log("Connected to database at:", dbPath);
+    if (err) {
+        console.error("CRITICAL DB ERROR:", err.message);
+    } else {
+        console.log("CONNECTED SUCCESSFULLY TO:", dbPath);
+    }
 });
 
 // INITIALIZE TABLE
@@ -75,4 +76,6 @@ app.post('/api/post', (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server is live on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server is live on port ${PORT}`);
+});
