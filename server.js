@@ -9,31 +9,17 @@ app.use(cors());
 app.use(express.json());
 
 // DATABASE CONFIGURATION
-// We use /data for Render's persistent disk, or the local folder for development.
 const dbDir = process.env.RENDER ? '/data' : '.';
 const dbPath = path.join(dbDir, 'vende_ya.db');
 
-// We use explicit flags (OPEN_READWRITE | OPEN_CREATE) to help Render's permissions
 let db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
-        console.error("CRITICAL DB ERROR (Disk):", err.message);
-        console.log("Attempting fallback to local directory...");
-        
-        // Fallback: If the /data disk fails, use local storage so the site doesn't crash
-        db = new sqlite3.Database('./vende_ya.db', (fallbackErr) => {
-            if (fallbackErr) {
-                console.error("TOTAL DB FAILURE:", fallbackErr.message);
-            } else {
-                console.log("CONNECTED TO FALLBACK: ./vende_ya.db");
-            }
-        });
-    } else {
-        console.log("SUCCESS: Database ready at", dbPath);
+        console.error("Disk Error, using local fallback...");
+        db = new sqlite3.Database('./vende_ya.db');
     }
-});
-
-// INITIALIZE TABLE
-db.serialize(() => {
+    console.log("Database initialized.");
+    
+    // FORCE TABLE CREATION IMMEDIATELY
     db.run(`CREATE TABLE IF NOT EXISTS listings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT,
@@ -45,12 +31,15 @@ db.serialize(() => {
         phone TEXT,
         address TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+    )`, (tableErr) => {
+        if (tableErr) console.error("Table Error:", tableErr.message);
+        else console.log("Table 'listings' is ready to go.");
+    });
 });
 
-// AUTO-DELETE (Runs every hour - deletes ads older than 3 days)
-cron.schedule('0 * * * *', () => {
-    db.run("DELETE FROM listings WHERE created_at <= datetime('now', '-3 days')");
+// HOME ROUTE (To avoid "Cannot GET /" error)
+app.get('/', (req, res) => {
+    res.send("<h1>Vende Ya Backend is Live!</h1><p>Database Path: " + dbPath + "</p>");
 });
 
 // API: GET LISTINGS
@@ -85,7 +74,12 @@ app.post('/api/post', (req, res) => {
     });
 });
 
+// AUTO-DELETE (Every hour)
+cron.schedule('0 * * * *', () => {
+    db.run("DELETE FROM listings WHERE created_at <= datetime('now', '-3 days')");
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`Server is live on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
