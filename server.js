@@ -9,16 +9,26 @@ app.use(cors());
 app.use(express.json());
 
 // DATABASE CONFIGURATION
-// On Render, the disk is already mounted at /data. We just point to it.
+// We use /data for Render's persistent disk, or the local folder for development.
 const dbDir = process.env.RENDER ? '/data' : '.';
 const dbPath = path.join(dbDir, 'vende_ya.db');
 
-// Initialize Database connection
-const db = new sqlite3.Database(dbPath, (err) => {
+// We use explicit flags (OPEN_READWRITE | OPEN_CREATE) to help Render's permissions
+let db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
-        console.error("CRITICAL DB ERROR:", err.message);
+        console.error("CRITICAL DB ERROR (Disk):", err.message);
+        console.log("Attempting fallback to local directory...");
+        
+        // Fallback: If the /data disk fails, use local storage so the site doesn't crash
+        db = new sqlite3.Database('./vende_ya.db', (fallbackErr) => {
+            if (fallbackErr) {
+                console.error("TOTAL DB FAILURE:", fallbackErr.message);
+            } else {
+                console.log("CONNECTED TO FALLBACK: ./vende_ya.db");
+            }
+        });
     } else {
-        console.log("CONNECTED SUCCESSFULLY TO:", dbPath);
+        console.log("SUCCESS: Database ready at", dbPath);
     }
 });
 
@@ -56,7 +66,7 @@ app.get('/api/listings', (req, res) => {
 
     db.all(query, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
